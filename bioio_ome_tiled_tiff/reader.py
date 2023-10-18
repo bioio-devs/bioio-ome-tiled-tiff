@@ -62,8 +62,7 @@ class Reader(reader.Reader):
     # they may not need to be used by your reader (i.e. input param is an array)
     _fs: "AbstractFileSystem"
     _path: str
-
-    backend: Optional[str] = "python"
+    
 
     @staticmethod
     def _is_supported_image(fs: AbstractFileSystem, path: str, **kwargs: Any) -> bool:
