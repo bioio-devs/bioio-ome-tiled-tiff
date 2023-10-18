@@ -63,35 +63,7 @@ class Reader(reader.Reader):
     _fs: "AbstractFileSystem"
     _path: str
 
-    backend: Optional[str] = None
-
-    def _general_data_array_constructor(
-        self,
-        image_data: types.ArrayLike,
-        tiff_tags: Optional[TiffTags] = None,
-    ) -> xr.DataArray:
-        # Unpack dims and coords from OME
-        coords = utils.get_coords_from_ome(
-            ome=self._rdr.metadata,
-            scene_index=0,
-        )
-
-        coords = {d: coords[d] for d in self.out_dim_order if d in coords}
-        image_data = transforms.reshape_data(
-            image_data, self.native_dim_order, "".join(self.out_dim_order)
-        )
-
-        attrs = {constants.METADATA_PROCESSED: self._rdr.metadata}
-
-        if tiff_tags is not None:
-            attrs[constants.METADATA_UNPROCESSED] = tiff_tags
-
-        return xr.DataArray(
-            image_data,
-            dims=self.out_dim_order,
-            coords=coords,
-            attrs=attrs,
-        )
+    backend: Optional[str] = "python"
 
     @staticmethod
     def _is_supported_image(fs: AbstractFileSystem, path: str, **kwargs: Any) -> bool:
@@ -164,47 +136,8 @@ class Reader(reader.Reader):
         return tuple(image_meta.id for image_meta in self._rdr.metadata.images)
 
     @property
-    def current_scene(self) -> str:
-        return self.scenes[self._current_scene_index]
-
-    @property
-    def current_scene_index(self) -> int:
-        return self._current_scene_index
-
-    def set_scene(self, scene_id: Union[str, int]) -> None:
-        """
-        For all BfioReader subclasses, the only allowed value is the name of the first
-        scene since only the first scene can be read by BioReader objects. This method
-        exists primarily to help this Reader fit into existing unit test templates and
-        in case BioReader is updated to support multiple scenes.
-
-        Parameters
-        ----------
-        scene_id: Union[str, int]
-            The scene id (if string) or scene index (if integer)
-            to set as the operating scene.
-
-        Raises
-        ------
-        IndexError
-            The provided scene id or index does not reference the first scene.
-        TypeError
-            The provided value wasn't a string (scene id) or integer (scene index).
-        """
-        # Route to int or str setting
-        if isinstance(scene_id, (str, int)):
-            # Only need to run when the scene id is different from current scene
-            if scene_id not in (self.current_scene, self.current_scene_index):
-                raise IndexError(
-                    "Scene id: Cannot change scene for "
-                    + f"{self.__class__.__name__} objects."
-                )
-
-        else:
-            raise TypeError(
-                f"Must provide either a string (for scene id) "
-                f"or integer (for scene index). Provided: {scene_id} ({type(scene_id)}."
-            )
+    def ome_metadata(self) -> OME:
+        return self._rdr.metadata
 
     @property
     def channel_names(self) -> Optional[List[str]]:
@@ -241,6 +174,30 @@ class Reader(reader.Reader):
             self._tiff_tags(),
         )
 
-    @property
-    def ome_metadata(self) -> OME:
-        return self._rdr.metadata
+    def _general_data_array_constructor(
+        self,
+        image_data: types.ArrayLike,
+        tiff_tags: Optional[TiffTags] = None,
+    ) -> xr.DataArray:
+        # Unpack dims and coords from OME
+        coords = utils.get_coords_from_ome(
+            ome=self._rdr.metadata,
+            scene_index=0,
+        )
+
+        coords = {d: coords[d] for d in self.out_dim_order if d in coords}
+        image_data = transforms.reshape_data(
+            image_data, self.native_dim_order, "".join(self.out_dim_order)
+        )
+
+        attrs = {constants.METADATA_PROCESSED: self._rdr.metadata}
+
+        if tiff_tags is not None:
+            attrs[constants.METADATA_UNPROCESSED] = tiff_tags
+
+        return xr.DataArray(
+            image_data,
+            dims=self.out_dim_order,
+            coords=coords,
+            attrs=attrs,
+        )
