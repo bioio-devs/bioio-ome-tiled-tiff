@@ -1,41 +1,60 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import logging
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from typing import Any, Optional, Tuple
-
+import dask.array as da
 import xarray as xr
-from bioio_base.dimensions import Dimensions
-from bioio_base.reader import Reader as BaseReader
+from bfio import BioReader
+from bioio_base import constants, dimensions, exceptions, io, reader, transforms, types
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractFileSystem
+from ome_types import OME
+from tifffile.tifffile import TiffFileError, TiffTags
+
+from . import utils
+
+###############################################################################
+
+log = logging.getLogger(__name__)
 
 ###############################################################################
 
 
-class Reader(BaseReader):
+class Reader(reader.Reader):
     """
-    The main class of each reader plugin. This class is subclass
-    of the abstract class reader (BaseReader) in bioio-base.
+    BioIO reader plugin for ome tiled tiffs.
 
     Parameters
     ----------
-    image: Any
-        Some type of object to read and follow the Reader specification.
+    image: types.PathLike
+        Path to image file.
+    chunk_dims: List[str]
+        Which dimensions to create chunks for.
+        Default: DEFAULT_CHUNK_DIMS
+        Note: Dimensions.SpatialY, and Dimensions.SpatialX will always be added to the
+        list if not present during dask array construction.
+    out_order: List[str]
+        The output dimension ordering.
+        Default: DEFAULT_DIMENSION_ORDER
     fs_kwargs: Dict[str, Any]
         Any specific keyword arguments to pass down to the fsspec created filesystem.
         Default: {}
 
     Notes
     -----
-    It is up to the implementer of the Reader to decide which types they would like to
-    accept (certain readers may not support buffers for example).
+    If the OME metadata in your file isn't OME schema compliant or does not validate
+    this will fail to read your file and raise an exception.
 
+    If the OME metadata in your file doesn't use the latest OME schema (2016-06),
+    this reader will make a request to the referenced remote OME schema to validate.
     """
 
     _xarray_dask_data: Optional["xr.DataArray"] = None
     _xarray_data: Optional["xr.DataArray"] = None
     _mosaic_xarray_dask_data: Optional["xr.DataArray"] = None
     _mosaic_xarray_data: Optional["xr.DataArray"] = None
-    _dims: Optional[Dimensions] = None
+    _dims: Optional[dimensions.Dimensions] = None
     _metadata: Optional[Any] = None
     _scenes: Optional[Tuple[str, ...]] = None
     _current_scene_index: int = 0
@@ -44,66 +63,139 @@ class Reader(BaseReader):
     _fs: "AbstractFileSystem"
     _path: str
 
-    # Required Methods
-
-    def __init__(image: Any, **kwargs: Any):
-        """
-        Store / cache certain parameters required for later reading.
-
-        Try not to read the image into memory here.
-        """
-        raise NotImplementedError()
-
     @staticmethod
-    def _is_supported_image(fs: "AbstractFileSystem", path: str, **kwargs: Any) -> bool:
-        """
-        Perform a check to determine if the object(s) or path(s) provided as
-        parameters are supported by this reader.
-        """
-        raise NotImplementedError()
+    def _is_supported_image(fs: AbstractFileSystem, path: str, **kwargs: Any) -> bool:
+        try:
+            if not isinstance(fs, LocalFileSystem):
+                return False
+
+            with BioReader(path, backend="python") as br:
+                # Fail fast if multi-image file
+                if len(br.metadata.images) > 1:
+                    raise exceptions.UnsupportedFileFormatError(
+                        path,
+                        "This file contains more than one scene and only the first "
+                        + "scene can be read by the OmeTiledTiffReader. "
+                        + "To read additional scenes, use the TiffReader, "
+                        + "OmeTiffReader, or BioformatsReader.",
+                    )
+
+                return True
+
+        # tifffile exceptions
+        except (TypeError, ValueError):
+            return False
+
+    def __init__(
+        self,
+        image: types.PathLike,
+        chunk_dims: Optional[Union[str, List[str]]] = None,
+        out_order: str = dimensions.DEFAULT_DIMENSION_ORDER,
+        fs_kwargs: Dict[str, Any] = {},
+        **kwargs: Any,
+    ):
+        # Expand details of provided image
+        self._fs, self._path = io.pathlike_to_fs(
+            image,
+            enforce_exists=True,
+            fs_kwargs=fs_kwargs,
+        )
+
+        if not isinstance(self._fs, LocalFileSystem):
+            raise ValueError(
+                "Cannot read .ome.tif from non-local file system. "
+                f"Received URI: {self._path}, which points to {type(self._fs)}."
+            )
+
+        try:
+            self._rdr = BioReader(self._path, backend=self.backend)
+        except (TypeError, ValueError, TiffFileError):
+            raise exceptions.UnsupportedFileFormatError(
+                self.__class__.__name__, self._path
+            )
+
+        # Add ndim attribute so _rdr can be passed directly to dask
+        self._rdr.ndim = len(self._rdr.shape)
+
+        # Setup dimension ordering
+        dims = "YXZCT"
+        self.native_dim_order = dims[: len(self._rdr.shape)]
+        assert all(d in out_order for d in dims)
+        self.out_dim_order = [d for d in out_order if d in dims]
+
+        # Currently do not support custom chunking, throw a warning.
+        if chunk_dims is not None:
+            log.warning(
+                "OmeTiledTiffReader does not currently support custom chunking."
+            )
 
     @property
     def scenes(self) -> Tuple[str, ...]:
-        """
-        Return the list of available scenes for the file using the
-        cached parameters stored to the object in the __init__.
-        """
-        raise NotImplementedError()
+        return tuple(image_meta.id for image_meta in self._rdr.metadata.images)
 
-    def _read_delayed(self) -> "xr.DataArray":
-        """
-        Return an xarray DataArray filled with a delayed dask array, coordinate planes,
-        and any metadata stored in the attrs.
+    @property
+    def ome_metadata(self) -> OME:
+        return self._rdr.metadata
 
-        Metadata should be labelled with one of the bioio-base constants.
-        """
-        raise NotImplementedError()
+    @property
+    def channel_names(self) -> Optional[List[str]]:
+        return self._rdr.channel_names
 
-    def _read_immediate(self) -> "xr.DataArray":
-        """
-        Return an xarray DataArray filled with an in-memory numpy ndarray,
-        coordinate planes, and any metadata stored in the attrs.
+    @property
+    def physical_pixel_sizes(self) -> types.PhysicalPixelSizes:
+        return types.PhysicalPixelSizes(
+            self._rdr.ps_z[0],
+            self._rdr.ps_y[0],
+            self._rdr.ps_x[0],
+        )
 
-        Metadata should be labelled with one of the bioio-base constants.
-        """
-        raise NotImplementedError()
+    def _read_delayed(self) -> xr.DataArray:
+        return self._general_data_array_constructor(
+            da.from_array(self._rdr, chunks=(1024, 1024) + (1,) * (self._rdr.ndim - 2)),
+            self._tiff_tags(),
+        )
 
-    # Optional Methods
+    def _tiff_tags(self) -> Optional[Dict[str, str]]:
+        tiff_tags: Optional[Dict[str, str]] = None
+        if self.backend == "python":
+            # Create a copy since TiffTags are not serializable
+            tiff_tags = {
+                code: tag.value
+                for code, tag in self._rdr._backend._rdr.pages[0].tags.items()
+            }
 
-    def _get_stitched_dask_mosaic(self) -> "xr.DataArray":
-        """
-        If your file returns an `M` dimension for "Mosiac Tile",
-        this function should stitch and return the stitched data as
-        an xarray DataArray both operating against the original delayed array
-        and returning a delayed array.
-        """
-        return super()._get_stitched_dask_mosaic()
+        return tiff_tags
 
-    def _get_stitched_mosaic(self) -> "xr.DataArray":
-        """
-        If your file returns an `M` dimension for "Mosiac Tile",
-        this function should stitch and return the stitched data as
-        an xarray DataArray both operating against the original in-memory array
-        and returning a in-memory array.
-        """
-        return super()._get_stitched_mosaic()
+    def _read_immediate(self) -> xr.DataArray:
+        return self._general_data_array_constructor(
+            self._rdr[:],
+            self._tiff_tags(),
+        )
+
+    def _general_data_array_constructor(
+        self,
+        image_data: types.ArrayLike,
+        tiff_tags: Optional[TiffTags] = None,
+    ) -> xr.DataArray:
+        # Unpack dims and coords from OME
+        coords = utils.get_coords_from_ome(
+            ome=self._rdr.metadata,
+            scene_index=0,
+        )
+
+        coords = {d: coords[d] for d in self.out_dim_order if d in coords}
+        image_data = transforms.reshape_data(
+            image_data, self.native_dim_order, "".join(self.out_dim_order)
+        )
+
+        attrs = {constants.METADATA_PROCESSED: self._rdr.metadata}
+
+        if tiff_tags is not None:
+            attrs[constants.METADATA_UNPROCESSED] = tiff_tags
+
+        return xr.DataArray(
+            image_data,
+            dims=self.out_dim_order,
+            coords=coords,
+            attrs=attrs,
+        )
