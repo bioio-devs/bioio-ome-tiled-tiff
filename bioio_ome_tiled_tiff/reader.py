@@ -108,7 +108,7 @@ class Reader(reader.Reader):
             )
 
         try:
-            self._rdr = BioReader(self._path, backend=self.backend)
+            self._rdr = BioReader(self._path, backend="python")
         except (TypeError, ValueError, TiffFileError):
             raise exceptions.UnsupportedFileFormatError(
                 self.__class__.__name__, self._path
@@ -156,15 +156,10 @@ class Reader(reader.Reader):
         )
 
     def _tiff_tags(self) -> Optional[Dict[str, str]]:
-        tiff_tags: Optional[Dict[str, str]] = None
-        if self.backend == "python":
-            # Create a copy since TiffTags are not serializable
-            tiff_tags = {
-                code: tag.value
-                for code, tag in self._rdr._backend._rdr.pages[0].tags.items()
-            }
-
-        return tiff_tags
+        return {
+            code: tag.value
+            for code, tag in self._rdr._backend._rdr.pages[0].tags.items()
+        }
 
     def _read_immediate(self) -> xr.DataArray:
         return self._general_data_array_constructor(
