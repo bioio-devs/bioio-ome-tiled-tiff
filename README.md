@@ -1,7 +1,7 @@
 # bioio-ome-tiled-tiff
 
-[![Build Status](https://github.com/bioio-devs/bioio-ome-tiled-tiff/workflows/CI/badge.svg)](https://github.com/bioio-devs/bioio-ome-tiled-tiff/actions)
-[![Documentation](https://github.com/bioio-devs/bioio-ome-tiled-tiff/workflows/Documentation/badge.svg)](https://bioio-devs.github.io/bioio-ome-tiled-tiff)
+[![Build Status](https://github.com/bioio-devs/bioio-ome-tiled-tiff/actions/workflows/ci.yml/badge.svg)](https://github.com/bioio-devs/bioio-ome-tiled-tiff/actions)
+[![Documentation](https://github.com/bioio-devs/bioio-ome-tiled-tiff/actions/workflows/docs.yml/badge.svg)](https://bioio-devs.github.io/bioio-ome-tiled-tiff)
 
 A BioIO reader plugin for reading tiled ome.tiff images.
 
