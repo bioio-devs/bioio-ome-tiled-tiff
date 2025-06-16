@@ -67,7 +67,9 @@ class Reader(reader.Reader):
     def _is_supported_image(fs: AbstractFileSystem, path: str, **kwargs: Any) -> bool:
         try:
             if not isinstance(fs, LocalFileSystem):
-                return False
+                raise exceptions.UnsupportedFileFormatError(
+                    path, "This file is not located on a local file system."
+                )
 
             with BioReader(path, backend="python") as br:
                 # Fail fast if multi-image file
@@ -83,8 +85,8 @@ class Reader(reader.Reader):
                 return True
 
         # tifffile exceptions
-        except (TypeError, ValueError):
-            return False
+        except (TypeError, ValueError) as e:
+            raise exceptions.UnsupportedFileFormatError(path, "Error: " + str(e))
 
     def __init__(
         self,
