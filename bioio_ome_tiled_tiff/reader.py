@@ -167,10 +167,11 @@ class Reader(reader.Reader):
         )
 
     def _tiff_tags(self) -> Optional[Dict[str, str]]:
-        return {
-            code: tag.value
-            for code, tag in self._rdr._backend._rdr.pages[0].tags.items()
+        tag_dict = {
+            str(tag.code): str(tag.value)
+            for tag in self._rdr._backend._rdr.pages[0].tags
         }
+        return tag_dict
 
     def _read_immediate(self) -> xr.DataArray:
         return self._general_data_array_constructor(
