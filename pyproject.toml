@@ -28,13 +28,14 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "bfio==2.3.0",
+  "bfio",
   "bioio-base>=0.2.0",
-  "dask[array]>=2021.4.1",
+  "dask[array]",
   "fsspec>=2022.8.0",
   "numpy>=1.21",
   "ome-types[lxml]>=0.4.0",
-  "tifffile>=2021.8.30,<2022.4.22",
+  "tifffile[zarr]>=2022.4.22,<2025.1.10; python_version < '3.11'",
+  "tifffile[zarr]>=2025.5.21; python_version >= '3.11'",
   "xarray>=0.16.1",
   "xmlschema", # no pin because it's pulled in from OME types
 ]

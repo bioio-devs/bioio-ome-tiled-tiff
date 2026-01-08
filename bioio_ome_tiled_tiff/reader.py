@@ -6,11 +6,19 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import dask.array as da
 import xarray as xr
 from bfio import BioReader
-from bioio_base import constants, dimensions, exceptions, io, reader, transforms, types
+from bioio_base import (
+    constants,
+    dimensions,
+    exceptions,
+    io,
+    reader,
+    transforms,
+    types,
+)
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractFileSystem
 from ome_types import OME
-from tifffile.tifffile import TiffFileError, TiffTags
+from tifffile import TiffFileError, TiffTags
 
 from . import utils
 
@@ -32,22 +40,24 @@ class Reader(reader.Reader):
     chunk_dims: List[str]
         Which dimensions to create chunks for.
         Default: DEFAULT_CHUNK_DIMS
-        Note: Dimensions.SpatialY, and Dimensions.SpatialX will always be added to the
-        list if not present during dask array construction.
+        Note: Dimensions.SpatialY, and Dimensions.SpatialX will always be
+        added to the list if not present during dask array construction.
     out_order: List[str]
         The output dimension ordering.
         Default: DEFAULT_DIMENSION_ORDER
     fs_kwargs: Dict[str, Any]
-        Any specific keyword arguments to pass down to the fsspec created filesystem.
+        Any specific keyword arguments to pass down to the fsspec created
+        filesystem.
         Default: {}
 
     Notes
     -----
-    If the OME metadata in your file isn't OME schema compliant or does not validate
-    this will fail to read your file and raise an exception.
+    If the OME metadata in your file isn't OME schema compliant or does not
+    validate this will fail to read your file and raise an exception.
 
-    If the OME metadata in your file doesn't use the latest OME schema (2016-06),
-    this reader will make a request to the referenced remote OME schema to validate.
+    If the OME metadata in your file doesn't use the latest OME schema
+    (2016-06), this reader will make a request to the referenced remote OME
+    schema to validate.
     """
 
     _xarray_dask_data: Optional["xr.DataArray"] = None
@@ -59,7 +69,8 @@ class Reader(reader.Reader):
     _scenes: Optional[Tuple[str, ...]] = None
     _current_scene_index: int = 0
     # Do not provide default value because
-    # they may not need to be used by your reader (i.e. input param is an array)
+    # they may not need to be used by your reader
+    # (i.e. input param is an array)
     _fs: "AbstractFileSystem"
     _path: str
 
@@ -76,8 +87,8 @@ class Reader(reader.Reader):
                 if len(br.metadata.images) > 1:
                     raise exceptions.UnsupportedFileFormatError(
                         path,
-                        "This file contains more than one scene and only the first "
-                        + "scene can be read by the OmeTiledTiffReader. "
+                        "This file contains more than one scene and only the "
+                        + "first scene can be read by the OmeTiledTiffReader. "
                         + "To read additional scenes, use the TiffReader, "
                         + "OmeTiffReader, or BioformatsReader.",
                     )
@@ -106,11 +117,18 @@ class Reader(reader.Reader):
         if not isinstance(self._fs, LocalFileSystem):
             raise ValueError(
                 "Cannot read .ome.tif from non-local file system. "
-                f"Received URI: {self._path}, which points to {type(self._fs)}."
+                f"Received URI: {self._path}, which points to {type(self._fs)}"
             )
 
         try:
             self._rdr = BioReader(self._path, backend="python")
+            # limit reader to only tiled images
+            if self._rdr._backend_name != "python":
+                # while bfio supports other formats, bio has specialized
+                # readers for them which should be used instead.
+                raise exceptions.UnsupportedFileFormatError(
+                    self.__class__.__name__, self._path
+                )
         except (TypeError, ValueError, TiffFileError):
             raise exceptions.UnsupportedFileFormatError(
                 self.__class__.__name__, self._path
@@ -127,9 +145,7 @@ class Reader(reader.Reader):
 
         # Currently do not support custom chunking, throw a warning.
         if chunk_dims is not None:
-            log.warning(
-                "OmeTiledTiffReader does not currently support custom chunking."
-            )
+            log.warning("OmeTiledTiffReader does not currently support custom chunking")
 
     @property
     def scenes(self) -> Tuple[str, ...]:
@@ -158,10 +174,15 @@ class Reader(reader.Reader):
         )
 
     def _tiff_tags(self) -> Optional[Dict[str, str]]:
-        return {
-            code: tag.value
-            for code, tag in self._rdr._backend._rdr.pages[0].tags.items()
-        }
+        try:
+            tag_dict = {
+                str(tag.code): str(tag.value)
+                for tag in self._rdr._backend._rdr.pages[0].tags
+            }
+            return tag_dict
+        except (AttributeError, IndexError, KeyError, TiffFileError, TypeError) as e:
+            log.warning(f"Could not extract TIFF tags: {e}; no tags.")
+            return None
 
     def _read_immediate(self) -> xr.DataArray:
         return self._general_data_array_constructor(
