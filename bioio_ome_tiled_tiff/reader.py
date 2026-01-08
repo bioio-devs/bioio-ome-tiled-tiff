@@ -88,8 +88,8 @@ class Reader(reader.Reader):
                     raise exceptions.UnsupportedFileFormatError(
                         path,
                         "This file contains more than one scene and only the "
-                        + " first scene can be read by the OmeTiledTiffReader."
-                        + " To read additional scenes, use the TiffReader, "
+                        + "first scene can be read by the OmeTiledTiffReader. "
+                        + "To read additional scenes, use the TiffReader, "
                         + "OmeTiffReader, or BioformatsReader.",
                     )
 
@@ -123,7 +123,7 @@ class Reader(reader.Reader):
         try:
             self._rdr = BioReader(self._path, backend="python")
             # limit reader to only tiled images
-            if not self._rdr._backend_name == "python":
+            if self._rdr._backend_name != "python":
                 # while bfio supports other formats, bio has specialized
                 # readers for them which should be used instead.
                 raise exceptions.UnsupportedFileFormatError(
@@ -180,7 +180,7 @@ class Reader(reader.Reader):
                 for tag in self._rdr._backend._rdr.pages[0].tags
             }
             return tag_dict
-        except Exception as e:
+        except (AttributeError, IndexError, KeyError, TiffFileError, TypeError) as e:
             log.warning(f"Could not extract TIFF tags: {e}; no tags.")
             return None
 
