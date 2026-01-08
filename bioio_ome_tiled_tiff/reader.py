@@ -122,6 +122,13 @@ class Reader(reader.Reader):
 
         try:
             self._rdr = BioReader(self._path, backend="python")
+            # limit reader to only tiled images
+            if not self._rdr._backend_name == "python":
+                # while bfio supports other formats, bio has specialized
+                # readers for them which should be used instead.
+                raise exceptions.UnsupportedFileFormatError(
+                    self.__class__.__name__, self._path
+                )
         except (TypeError, ValueError, TiffFileError):
             raise exceptions.UnsupportedFileFormatError(
                 self.__class__.__name__, self._path
@@ -167,11 +174,15 @@ class Reader(reader.Reader):
         )
 
     def _tiff_tags(self) -> Optional[Dict[str, str]]:
-        tag_dict = {
-            str(tag.code): str(tag.value)
-            for tag in self._rdr._backend._rdr.pages[0].tags
-        }
-        return tag_dict
+        try:
+            tag_dict = {
+                str(tag.code): str(tag.value)
+                for tag in self._rdr._backend._rdr.pages[0].tags
+            }
+            return tag_dict
+        except Exception as e:
+            log.warning(f"Could not extract TIFF tags: {e}; no tags.")
+            return None
 
     def _read_immediate(self) -> xr.DataArray:
         return self._general_data_array_constructor(
