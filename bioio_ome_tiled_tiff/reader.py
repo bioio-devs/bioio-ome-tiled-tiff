@@ -69,8 +69,7 @@ class Reader(reader.Reader):
     _scenes: Optional[Tuple[str, ...]] = None
     _current_scene_index: int = 0
     # Do not provide default value because
-    # they may not need to be used by your reader
-    # (i.e. input param is an array)
+    # they may not need to be used by your reader (i.e. input param is an array)
     _fs: "AbstractFileSystem"
     _path: str
 
