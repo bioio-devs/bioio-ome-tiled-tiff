@@ -6,15 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import dask.array as da
 import xarray as xr
 from bfio import BioReader
-from bioio_base import (
-    constants,
-    dimensions,
-    exceptions,
-    io,
-    reader,
-    transforms,
-    types,
-)
+from bioio_base import constants, dimensions, exceptions, io, reader, transforms, types
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractFileSystem
 from ome_types import OME
@@ -40,20 +32,19 @@ class Reader(reader.Reader):
     chunk_dims: List[str]
         Which dimensions to create chunks for.
         Default: DEFAULT_CHUNK_DIMS
-        Note: Dimensions.SpatialY, and Dimensions.SpatialX will always be
-        added to the list if not present during dask array construction.
+        Note: Dimensions.SpatialY, and Dimensions.SpatialX will always be added to the
+        list if not present during dask array construction.
     out_order: List[str]
         The output dimension ordering.
         Default: DEFAULT_DIMENSION_ORDER
     fs_kwargs: Dict[str, Any]
-        Any specific keyword arguments to pass down to the fsspec created
-        filesystem.
+        Any specific keyword arguments to pass down to the fsspec created filesystem.
         Default: {}
 
     Notes
     -----
-    If the OME metadata in your file isn't OME schema compliant or does not
-    validate this will fail to read your file and raise an exception.
+    If the OME metadata in your file isn't OME schema compliant or does not validate
+    this will fail to read your file and raise an exception.
 
     If the OME metadata in your file doesn't use the latest OME schema
     (2016-06), this reader will make a request to the referenced remote OME
@@ -86,8 +77,8 @@ class Reader(reader.Reader):
                 if len(br.metadata.images) > 1:
                     raise exceptions.UnsupportedFileFormatError(
                         path,
-                        "This file contains more than one scene and only the "
-                        + "first scene can be read by the OmeTiledTiffReader. "
+                        "This file contains more than one scene and only the first "
+                        + "scene can be read by the OmeTiledTiffReader. "
                         + "To read additional scenes, use the TiffReader, "
                         + "OmeTiffReader, or BioformatsReader.",
                     )
@@ -116,7 +107,7 @@ class Reader(reader.Reader):
         if not isinstance(self._fs, LocalFileSystem):
             raise ValueError(
                 "Cannot read .ome.tif from non-local file system. "
-                f"Received URI: {self._path}, which points to {type(self._fs)}"
+                f"Received URI: {self._path}, which points to {type(self._fs)}."
             )
 
         try:
@@ -144,7 +135,9 @@ class Reader(reader.Reader):
 
         # Currently do not support custom chunking, throw a warning.
         if chunk_dims is not None:
-            log.warning("OmeTiledTiffReader does not currently support custom chunking")
+            log.warning(
+                "OmeTiledTiffReader does not currently support custom chunking."
+            )
 
     @property
     def scenes(self) -> Tuple[str, ...]:
