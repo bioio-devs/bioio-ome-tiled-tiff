@@ -116,8 +116,11 @@ class Reader(reader.Reader):
             if self._rdr._backend_name != "python":
                 # while bfio supports other formats, bio has specialized
                 # readers for them which should be used instead.
+                msg = f"Please to use different bioio modules for {self._path}"
                 raise exceptions.UnsupportedFileFormatError(
-                    self.__class__.__name__, self._path
+                    self.__class__.__name__,
+                    self._path,
+                    msg_extra=msg,
                 )
         except (TypeError, ValueError, TiffFileError):
             raise exceptions.UnsupportedFileFormatError(
