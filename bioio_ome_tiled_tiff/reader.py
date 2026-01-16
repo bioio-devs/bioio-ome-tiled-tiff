@@ -10,7 +10,7 @@ from bioio_base import constants, dimensions, exceptions, io, reader, transforms
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.spec import AbstractFileSystem
 from ome_types import OME
-from tifffile.tifffile import TiffFileError, TiffTags
+from tifffile import TiffFileError, TiffTags
 
 from . import utils
 
@@ -46,8 +46,9 @@ class Reader(reader.Reader):
     If the OME metadata in your file isn't OME schema compliant or does not validate
     this will fail to read your file and raise an exception.
 
-    If the OME metadata in your file doesn't use the latest OME schema (2016-06),
-    this reader will make a request to the referenced remote OME schema to validate.
+    If the OME metadata in your file doesn't use the latest OME schema
+    (2016-06), this reader will make a request to the referenced remote OME
+    schema to validate.
     """
 
     _xarray_dask_data: Optional["xr.DataArray"] = None
@@ -111,6 +112,13 @@ class Reader(reader.Reader):
 
         try:
             self._rdr = BioReader(self._path, backend="python")
+            # limit reader to only tiled images
+            if self._rdr._backend_name != "python":
+                # while bfio supports other formats, bio has specialized
+                # readers for them which should be used instead.
+                raise exceptions.UnsupportedFileFormatError(
+                    self.__class__.__name__, self._path
+                )
         except (TypeError, ValueError, TiffFileError):
             raise exceptions.UnsupportedFileFormatError(
                 self.__class__.__name__, self._path
@@ -158,10 +166,15 @@ class Reader(reader.Reader):
         )
 
     def _tiff_tags(self) -> Optional[Dict[str, str]]:
-        return {
-            code: tag.value
-            for code, tag in self._rdr._backend._rdr.pages[0].tags.items()
-        }
+        try:
+            tag_dict = {
+                str(tag.code): str(tag.value)
+                for tag in self._rdr._backend._rdr.pages[0].tags
+            }
+            return tag_dict
+        except (AttributeError, IndexError, KeyError, TiffFileError, TypeError) as e:
+            log.warning(f"Could not extract TIFF tags: {e}; no tags.")
+            return None
 
     def _read_immediate(self) -> xr.DataArray:
         return self._general_data_array_constructor(
