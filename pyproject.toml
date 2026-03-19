@@ -37,7 +37,7 @@ dependencies = [
   "tifffile[zarr]>=2022.4.22,<2025.1.10; python_version < '3.11'",
   "tifffile[zarr]>=2025.5.21; python_version >= '3.11'",
   "xarray>=0.16.1",
-  "scyjava==1.12.2", # 1.12.3 and 1.12.4 have path errors on Windows
+  "jgo @ git+https://github.com/apposed/jgo@c9c4448c438861b91afcf3f9da966ae2264106a8",
   "xmlschema", # no pin because it's pulled in from OME types
 ]
 
