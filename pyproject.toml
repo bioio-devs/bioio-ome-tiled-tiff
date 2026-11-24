@@ -36,7 +36,7 @@ dependencies = [
   "numpy>=1.21",
   "ome-types[lxml]>=0.4.0",
   "tifffile[zarr]>=2022.4.22,<2025.1.10; python_version < '3.11'",
-  "tifffile[zarr]>=2025.5.21; python_version >= '3.11'",
+  "tifffile[zarr]>=2025.5.21,<2026.9.20; python_version >= '3.11'",
   "xarray>=0.16.1",
   "xmlschema", # no pin because it's pulled in from OME types
 ]
