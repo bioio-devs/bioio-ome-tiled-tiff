@@ -13,7 +13,7 @@ name = "bioio-ome-tiled-tiff"
 description = "A BioIO reader plugin for reading tiled ome.tiff images."
 keywords = []
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT License" }
 authors = [
   { email = "brian.whitney@alleninstitute.org", name = "bioio-devs" },
@@ -21,21 +21,22 @@ authors = [
 classifiers = [
   "Development Status :: 4 - Beta",
   "Natural Language :: English",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
 ]
 dynamic = ["version"]
 dependencies = [
-  "bfio",
+  "bfio>=2.5.1",
   "bioio-base>=0.2.0",
   "dask[array]",
   "fsspec>=2022.8.0",
   "numpy>=1.21",
   "ome-types[lxml]>=0.4.0",
   "tifffile[zarr]>=2022.4.22,<2025.1.10; python_version < '3.11'",
-  "tifffile[zarr]>=2025.5.21,<2026.9.20; python_version >= '3.11'",
+  "tifffile[zarr]>=2025.5.21; python_version >= '3.11'",
   "xarray>=0.16.1",
   "xmlschema", # no pin because it's pulled in from OME types
 ]
@@ -79,7 +80,7 @@ exclude = ["*docs/*", "*tests/*"]
 # tools
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
